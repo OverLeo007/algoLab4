@@ -1,20 +1,22 @@
+import argparse
 from random import shuffle
 import pygame as pg
-# import sys
-# import argparse
-# import os
 from math import ceil
-# from typing import Optional, Callable
+from typing import Optional, Callable, Tuple, List
 import colour
 from numba import njit
 import numpy as np
-import winsound
+from my_sort import my_sort as ms
 
 from functools import wraps
 from time import time
 
 
-def timing(f):
+def timing(f: Callable):
+    """
+    Декоратор для засечения времени выполнения отрисовки
+    @param f: функция, время которой засекаем
+    """
     @wraps(f)
     def wrap(*args, **kw):
         ts = time()
@@ -29,15 +31,33 @@ def timing(f):
     return wrap
 
 
-def normalize_color(color):
+def normalize_color(color: tuple[int, int, int]) -> tuple[float, ...]:
+    """
+    Приведение цвета к нормальному виду
+
+    @param color: цвет в формате (0-255, 0-255, 0-255)
+    @return: цвет в формате (0-1, 0-1, 0-1)
+    """
     return tuple(col / 255 for col in color)
 
 
-def col_to_bytes(col_array):
+def col_to_bytes(col_array: list[colour.Color, ...]) -> list[tuple[int, ...]]:
+    """
+    Приведение цвета из нормального вида к (255, 0, 0)
+    @param col_array: (0-1, 0-1, 0-1)
+    @return: цвет в формате (0-255, 0-255, 0-255)
+    """
     return [tuple(map(lambda x: int(x * 255), color.get_rgb())) for color in col_array]
 
 
-def get_grad(length, col1, col2):
+def get_grad(length: int, col1: tuple[int, int, int], col2: tuple[int, int, int]) -> np.ndarray:
+    """
+    Создает список градиентного перехода от col1 до col2
+    @param length: длина списка
+    @param col1: цвет начала градиента
+    @param col2: цвет конца градиента
+    @return: список градиентного перехода от col1 до col2
+    """
     color1 = colour.Color(rgb=normalize_color(col1))
     color2 = colour.Color(rgb=normalize_color(col2))
     col_array = list(color1.range_to(color2, length))
@@ -45,10 +65,10 @@ def get_grad(length, col1, col2):
 
 
 @njit(fastmath=True)
-def another_cols_array(array, ar_len, col_array, width, height, red, res_array, red_num):
+def another_cols_array(array, max_el, ar_len, col_array,
+                       width, height, red, res_array, red_num):
     col_count = ar_len
     norm_x = width / col_count
-    max_el = max(array)
     for index, value in enumerate(array):
         norm_h = int((value / max_el) * (height - 100))
         norm_y = height - norm_h
@@ -57,70 +77,93 @@ def another_cols_array(array, ar_len, col_array, width, height, red, res_array, 
         for x in range(int(norm_x * index), int(norm_x * (index + 1))):
             for y in range(int(norm_y), int(norm_y + norm_h)):
                 res_array[x, y] = red_num if index == red else col_array[res - 1]
-
     return res_array
 
 
-def draw_array_col(array: list, red, width: int, height: int,
-                   screen: pg.Surface, colors_array, method="default"):
-    array = np.array(array)
+def draw_array_col(array: np.ndarray, max_el: int, length: int,
+                   red: int, width: int, height: int,
+                   screen: pg.Surface, colors_array: np.ndarray, tick: int):
+    """
+    Отрисовка нового состояния массива
 
-    screen.fill((0, 0, 0))
-    if method == "default":
-        col_count = len(array)
-        max_el = max(array)
-        norm_x = width / col_count
-        norm_w = norm_x if norm_x > 1 else 1
-
-        for index, value in enumerate(array):
-            norm_h = (value / max_el) * (height - 100)
-            norm_y = height - norm_h
-
-            if index != red:
-                cur_color = colors_array[int(value / max_el * col_count) - 1]
-            else:
-                cur_color = (255, 0, 0)
-            pg.draw.rect(screen, cur_color, (ceil(norm_x * index), norm_y, ceil(norm_w), norm_h))
+    @param array: массив
+    @param max_el: максимальный элемент массива
+    @param length: длина массива
+    @param red: текущее положение изменяемого элемента
+    @param width: ширина экрана
+    @param height: длина экрана
+    @param screen: surface на котором рисуем
+    @param colors_array: список градиентного перехода, определенный для всего массива
+    @param tick: сколько времени должна занимать отрисовка
+    """
+    norm_x = width / length
+    norm_w = norm_x if norm_x > 1 else 1
+    if red == 0:
+        screen.fill((0, 0, 0))
     else:
-        columns = another_cols_array(array, len(array), colors_array, width, height, red,
-                                     np.full((width, height) + (3,), [0, 0, 0]),
-                                     np.array((255, 0, 0)))
-        pg.surfarray.blit_array(screen, columns)
+        screen.fill((0, 0, 0), rect=(0, 0, (red + 1) * norm_x, height))
+    h_caf = (height - 100) / max_el
+
+    for index, value in enumerate(array):
+
+        norm_h = value * h_caf
+        norm_y = height - norm_h
+
+        if index != red or value == max_el:
+            cur_color = colors_array[int(value / max_el * length) - 1]
+        else:
+            cur_color = (255, 0, 0)
+        if red != 0 and index == red + 1:
+            break
+        pg.draw.rect(screen, cur_color, (ceil(norm_x * index), norm_y, ceil(norm_w), norm_h))
+
+    # screen.fill((0, 0, 0))
+    # columns = another_cols_array(array, max_el, length, colors_array, width, height, red,
+    #                              np.full((width, height) + (3,), [0, 0, 0]),
+    #                              np.array((255, 0, 0)))
+    # pg.surfarray.blit_array(screen, columns)
 
     pg.display.update()
-    pg.time.wait(1)
+    pg.time.wait(tick)
 
 
-def make_array(length):
-    array = [i for i in range(1, length)]
-    shuffle(array)
-    return array
-
-
-def draw_sort():
+def draw_sort(array: np.ndarray, reverse: bool = False,
+              colors: tuple[tuple[int, int, int], tuple[int, int, int]] =
+              ((255, 255, 255), (255, 255, 255))):
+    """
+    Функция отрисовки процесса сортировки
+    @param array: сортируемый массив
+    @param reverse: нужно ли сортировать по неубыванию
+    @param colors: цвета для создания градиентного перехода от colors[0] до colors[1]
+    """
     pg.init()
     width, height = 800, 600
     screen = pg.display.set_mode((width, height))
     pg.display.set_caption("MergeSort visualize")
-    ar_len = 50
-    array = make_array(ar_len)
-    colors_array = get_grad(ar_len, *((255, 0, 0), (0, 255, 0)))
 
-    # frequency = 3000  # Set Frequency To 2500 Hertz
-    # duration = 200  # Set Duration To 1000 ms == 1 second
-    #
-    #
-    # exit()
+    ar_len = len(array)
+    if ar_len <= 100:
+        tick = 20
+    else:
+        tick = 1
+    colors_array = get_grad(ar_len, *colors)
+    max_element = max(array)
 
     @timing
-    def my_sort(array_to_sort: list, reverse: bool = False, method=None):
-        if method is None:
-            if len(array_to_sort) > 220:
-                method = "optimized"
-            else:
-                method = "default"
+    def my_sort(array_to_sort: np.ndarray):
+        """
+        Функция сортировки
 
-        def merge_sort(arr: list, left, right):
+        @param array_to_sort: сортируемый массив
+        """
+        def merge_sort(arr: np.ndarray, left, right):
+            """
+            Основная функция сортировки слиянием, распределяющая границы сортируемых частей
+            @param arr: исходный массив
+            @param left: индекс левого элемента
+            @param right: индекс правого элемента
+            @return: отсортированный массив
+            """
             mid = (left + right) // 2
             if left < right:
                 merge_sort(arr, left, mid)
@@ -128,7 +171,15 @@ def draw_sort():
                 merge(arr, left, mid, mid + 1, right)
             return arr
 
-        def merge(arr: list, left1, right1, left2, right2):
+        def merge(arr: np.ndarray, left1, right1, left2, right2):
+            """
+            Функция слияния двух частей
+            @param arr: исходный массив
+            @param left1: левая граница левой части
+            @param right1: правая граница левой части
+            @param left2: левая граница правой части
+            @param right2: правая граница правой части
+            """
             i = left1
             j = left2
             temp = [0] * (right2 + 1 - left1)
@@ -159,11 +210,12 @@ def draw_sort():
             for i in range(left1, right2 + 1):
                 arr[i] = temp[j]
                 j += 1
-                draw_array_col(arr, i, width, height, screen, colors_array, method)
+                draw_array_col(arr, max_element, ar_len, i, width, height, screen, colors_array,
+                               tick)
 
         return merge_sort(array_to_sort, 0, len(array_to_sort) - 1)
 
-    # my_sort(array)
+    my_sort(array)
     run = True
     while run:
         pg.display.update()
@@ -172,18 +224,62 @@ def draw_sort():
                 pg.quit()
                 run = False
             if event.type == pg.KEYDOWN:
-                if event.key == pg.K_r:
-                    shuffle(array)
                 if event.key == pg.K_UP:
                     shuffle(array)
-                    my_sort(array, method="default")
-                if event.key == pg.K_DOWN:
-                    shuffle(array)
-                    my_sort(array, method="optimized")
+                    my_sort(array)
+
+
+def main():
+    """
+    Точка входа из для CLI
+    """
+    parser = argparse.ArgumentParser(description="Сортировка методом слияния")
+
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument("--array", "-a", dest="array", type=int, nargs="+",
+                       help="Список чисел через пробел")
+    group.add_argument("--file_path", "-fp", dest="file_path",
+                       help="Путь к файлу с числами расположенными через пробел")
+    group.add_argument("--randomized_array", "-ra", dest="ra_len", type=int,
+                       help="Длина для создания рандомного массива")
+    parser.add_argument("--reverse", "-r", dest="reverse",
+                        type=argparse.BooleanOptionalAction,
+                        help="Если указано - сортирует по невозрастанию")
+    parser.add_argument("--visualize", "-v", dest="visualize",
+                        action=argparse.BooleanOptionalAction,
+                        help="visualize array while sorting")
+    parser.add_argument("--colors", "-c", type=int, nargs=6,
+                        help="Цвета наименьшего и наибольшего элемента массива, "
+                             "для создания градиента")
+    args = parser.parse_args()
+
+    res = {"array": None,
+           "reverse": False}
+
+    if args.array:
+        res["array"] = np.array(args.array)
+    elif args.file_path:
+        with open(args.file_path, "r") as file:
+            res["array"] = np.array(list(map(int, file.read().replace("\n", "").split(" "))))
+    elif args.ra_len:
+        tmp = [i for i in range(1, args.ra_len)]
+        shuffle(tmp)
+        res["array"] = np.array(tmp)
+
+    if args.reverse:
+        res["reverse"] = args.reverse
+
+    if args.visualize:
+        if args.colors:
+            r1, g1, b1, r2, g2, b2 = args.colors
+            res["colors"] = ((r1, g1, b1), (r2, g2, b2))
+        draw_sort(**res)
+    else:
+        print(ms(**res))
 
 
 if __name__ == '__main__':
-    draw_sort()
-    # print(get_grad([i for i in range(0, 100)], (255, 0, 0), (0, 0, 255)))
-    # print(my_sort([randint(1, 100) for _ in range(100)]))
-    # print(color_constructor("0.0.5"))
+    arr_to_s = np.array([i for i in range(1, 500)])
+    shuffle(arr_to_s)
+    draw_sort(arr_to_s, colors=((255, 0, 0), (0, 0, 255)))
+    # main()

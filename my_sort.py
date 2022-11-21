@@ -9,13 +9,13 @@ def my_sort(array: list, reverse: bool = False,
     """
     Реализация сортировки слиянием
 
-    :param array: сортируемый массив
-    :param reverse: сортируем напрямую или в обратную сторону
-    :param key: ключ сортировки в виде функции
-    :param cmp: компаратор для значений
-    :return: отсортированный массив
+    @param array: сортируемый массив
+    @param reverse: сортируем напрямую или в обратную сторону
+    @param key: ключ сортировки в виде функции
+    @param cmp: компаратор для значений
+    @return: отсортированный массив
     """
-
+    array = list(array)
     key = key if key is not None else lambda x: x
     cmp = cmp if cmp is not None else lambda x, y: x < y
 
