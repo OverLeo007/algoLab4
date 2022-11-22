@@ -2,7 +2,7 @@ import argparse
 from random import shuffle
 import pygame as pg
 from math import ceil
-from typing import Optional, Callable, Tuple, List
+from typing import Optional, Callable
 import colour
 from numba import njit
 import numpy as np
@@ -17,14 +17,17 @@ def timing(f: Callable):
     Декоратор для засечения времени выполнения отрисовки
     @param f: функция, время которой засекаем
     """
+
     @wraps(f)
     def wrap(*args, **kw):
         ts = time()
         result = f(*args, **kw)
         te = time()
+        with open("time_log.txt", "a", encoding="utf-8") as file:
+            file.write(f'func: {f.__name__} len: {len(args[0])} '
+                       f'time: {te - ts:2.4f} sec\n')
         print(
             f'func: {f.__name__} len: {len(args[0])} '
-            f'method: {kw["method"] if kw.get("method", False) else "auto"} '
             f'time: {te - ts:2.4f} sec')
         return result
 
@@ -127,8 +130,8 @@ def draw_array_col(array: np.ndarray, max_el: int, length: int,
     pg.time.wait(tick)
 
 
-def draw_sort(array: np.ndarray, reverse: bool = False,
-              colors: tuple[tuple[int, int, int], tuple[int, int, int]] =
+def draw_sort(array: np.ndarray, reverse: Optional[bool] = False,
+              colors: Optional[tuple[tuple[int, int, int], tuple[int, int, int]]] =
               ((255, 255, 255), (255, 255, 255))):
     """
     Функция отрисовки процесса сортировки
@@ -156,7 +159,8 @@ def draw_sort(array: np.ndarray, reverse: bool = False,
 
         @param array_to_sort: сортируемый массив
         """
-        def merge_sort(arr: np.ndarray, left, right):
+
+        def merge_sort(arr: np.ndarray, left: int, right: int):
             """
             Основная функция сортировки слиянием, распределяющая границы сортируемых частей
             @param arr: исходный массив
@@ -171,7 +175,7 @@ def draw_sort(array: np.ndarray, reverse: bool = False,
                 merge(arr, left, mid, mid + 1, right)
             return arr
 
-        def merge(arr: np.ndarray, left1, right1, left2, right2):
+        def merge(arr: np.ndarray, left1: int, right1: int, left2: int, right2: int):
             """
             Функция слияния двух частей
             @param arr: исходный массив
@@ -223,10 +227,10 @@ def draw_sort(array: np.ndarray, reverse: bool = False,
             if event.type == pg.QUIT:
                 pg.quit()
                 run = False
-            if event.type == pg.KEYDOWN:
-                if event.key == pg.K_UP:
-                    shuffle(array)
-                    my_sort(array)
+            # if event.type == pg.KEYDOWN:
+            #     if event.key == pg.K_UP:
+            #         shuffle(array)
+            #         my_sort(array)
 
 
 def main():
@@ -243,7 +247,7 @@ def main():
     group.add_argument("--randomized_array", "-ra", dest="ra_len", type=int,
                        help="Длина для создания рандомного массива")
     parser.add_argument("--reverse", "-r", dest="reverse",
-                        type=argparse.BooleanOptionalAction,
+                        action=argparse.BooleanOptionalAction,
                         help="Если указано - сортирует по невозрастанию")
     parser.add_argument("--visualize", "-v", dest="visualize",
                         action=argparse.BooleanOptionalAction,
@@ -262,7 +266,7 @@ def main():
         with open(args.file_path, "r") as file:
             res["array"] = np.array(list(map(int, file.read().replace("\n", "").split(" "))))
     elif args.ra_len:
-        tmp = [i for i in range(1, args.ra_len)]
+        tmp = [i for i in range(1, args.ra_len + 1)]
         shuffle(tmp)
         res["array"] = np.array(tmp)
 
@@ -279,7 +283,7 @@ def main():
 
 
 if __name__ == '__main__':
-    arr_to_s = np.array([i for i in range(1, 500)])
-    shuffle(arr_to_s)
-    draw_sort(arr_to_s, colors=((255, 0, 0), (0, 0, 255)))
-    # main()
+    # arr_to_s = np.array([i for i in range(1, 500)])
+    # shuffle(arr_to_s)
+    # draw_sort(arr_to_s, colors=((255, 0, 0), (0, 0, 255)))
+    main()

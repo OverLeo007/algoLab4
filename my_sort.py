@@ -19,6 +19,16 @@ def my_sort(array: list, reverse: bool = False,
     key = key if key is not None else lambda x: x
     cmp = cmp if cmp is not None else lambda x, y: x < y
 
+    def insertion_sort(arr):
+        for i in range(1, len(arr)):
+            temp = arr[i]
+            j = i - 1
+            while j >= 0 and \
+                    (cmp(key(temp),  key(arr[j])) if reverse else cmp(key(arr[j]),  key(temp))):
+                arr[j + 1] = arr[j]
+                j = j - 1
+            arr[j + 1] = temp
+
     def merge_sort(arr: list, depth: int = 1) -> list:
 
         if (n_len := len(arr)) > 1:
@@ -26,8 +36,8 @@ def my_sort(array: list, reverse: bool = False,
             left = arr[:mid]
             right = arr[mid:]
             if depth + 1 > getrecursionlimit():
-                left = sorted(left)
-                right = sorted(right)
+                insertion_sort(left)
+                insertion_sort(right)
             else:
                 merge_sort(left, depth + 1)
                 merge_sort(right, depth + 1)
@@ -62,4 +72,6 @@ def my_sort(array: list, reverse: bool = False,
 if __name__ == '__main__':
     from random import randint
 
-    print(my_sort([randint(1, 1000) for i in range(1000)], reverse=True))
+    lst = [randint(1, 1000) for i in range(1000)]
+    insertion_sort(lst)
+    print(lst)
