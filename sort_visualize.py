@@ -1,15 +1,74 @@
 import argparse
+import os
 from random import shuffle
 import pygame as pg
 from math import ceil
 from typing import Optional, Callable
 import colour
+import pygame.image
 from numba import njit
 import numpy as np
 from my_sort import my_sort as ms
-
+from PIL import Image
 from functools import wraps
 from time import time
+
+
+class GifSaver:
+    def __init__(self, directory, screen_width, screen_height):
+        self.gif_dir = directory
+        self.res_gif_path = self.gif_dir + r"\res1.gif"
+        self.temp_gif_path = self.gif_dir + r"\res2.gif"
+        self.frames = []
+        self.frames_count = 0
+        self.size = (screen_width, screen_height)
+        self.is_first_pic = True
+        self.file_toggle = True
+
+    def add_img(self, data):
+        img = Image.frombytes("RGBA", self.size, data)
+        self.frames_count += 1
+        self.frames.append(img)
+        if self.is_first_pic:
+            img.save(self.res_gif_path)
+            img.save(self.temp_gif_path)
+            self.is_first_pic = False
+            return
+
+        if self.frames_count > 200:
+            self.save_to_gif()
+
+    def save_to_gif(self):
+        if self.file_toggle:
+            reading_gif_p, writing_gif_p = self.res_gif_path, self.temp_gif_path
+            reading_gif, writing_gif = Image.open(reading_gif_p), Image.open(writing_gif_p)
+        else:
+            reading_gif_p, writing_gif_p = self.temp_gif_path, self.res_gif_path
+            reading_gif, writing_gif = Image.open(reading_gif_p), Image.open(writing_gif_p)
+
+        self.file_toggle = not self.file_toggle
+
+        reading_gif.save(writing_gif_p,
+                         save_all=True,
+                         append_images=self.frames,
+                         optimize=True,
+                         duration=20,
+                         loop=1)
+
+        reading_gif.close()
+        writing_gif.close()
+        self.frames.clear()
+        self.frames_count = 0
+
+    def __del__(self):
+        if self.file_toggle:
+            fin_gif, del_gif = self.res_gif_path, self.temp_gif_path
+        else:
+            fin_gif, del_gif = self.temp_gif_path, self.res_gif_path
+        os.remove(del_gif)
+        print(f"Гифка сохранена по адресу {fin_gif}")
+
+
 
 
 def timing(f: Callable):
@@ -32,6 +91,17 @@ def timing(f: Callable):
         return result
 
     return wrap
+
+
+def call_counter(func):
+    def helper(*args, **kwargs):
+        helper.calls += 1
+        print(helper.calls)
+        return func(*args, **kwargs)
+
+    print("zero")
+    helper.calls = 0
+    return helper
 
 
 def normalize_color(color: tuple[int, int, int]) -> tuple[float, ...]:
@@ -83,6 +153,7 @@ def another_cols_array(array, max_el, ar_len, col_array,
     return res_array
 
 
+# @call_counter
 def draw_array_col(array: np.ndarray, max_el: int, length: int,
                    red: int, width: int, height: int,
                    screen: pg.Surface, colors_array: np.ndarray, tick: int):
@@ -132,12 +203,13 @@ def draw_array_col(array: np.ndarray, max_el: int, length: int,
 
 def draw_sort(array: np.ndarray, reverse: Optional[bool] = False,
               colors: Optional[tuple[tuple[int, int, int], tuple[int, int, int]]] =
-              ((255, 255, 255), (255, 255, 255))):
+              ((255, 255, 255), (255, 255, 255)), make_gif=False, gif_method="slow"):
     """
     Функция отрисовки процесса сортировки
     @param array: сортируемый массив
     @param reverse: нужно ли сортировать по неубыванию
     @param colors: цвета для создания градиентного перехода от colors[0] до colors[1]
+    @param make_gif: флаг создания гифки
     """
     pg.init()
     width, height = 800, 600
@@ -151,6 +223,8 @@ def draw_sort(array: np.ndarray, reverse: Optional[bool] = False,
         tick = 1
     colors_array = get_grad(ar_len, *colors)
     max_element = max(array)
+    if make_gif:
+        gifer = GifSaver("images", width, height)
 
     @timing
     def my_sort(array_to_sort: np.ndarray):
@@ -216,10 +290,20 @@ def draw_sort(array: np.ndarray, reverse: Optional[bool] = False,
                 j += 1
                 draw_array_col(arr, max_element, ar_len, i, width, height, screen, colors_array,
                                tick)
+                if gif_method == "slow" and make_gif:
+                    gifer.add_img(pygame.image.tostring(screen, "RGBA"))
+
+            if make_gif and gif_method == "fast":
+                gifer.add_img(pygame.image.tostring(screen, "RGBA"))
+                # print()
+                # return
 
         return merge_sort(array_to_sort, 0, len(array_to_sort) - 1)
 
     my_sort(array)
+    if make_gif:
+        gifer.save_to_gif()
+        del gifer
     run = True
     while run:
         pg.display.update()
@@ -227,10 +311,6 @@ def draw_sort(array: np.ndarray, reverse: Optional[bool] = False,
             if event.type == pg.QUIT:
                 pg.quit()
                 run = False
-            # if event.type == pg.KEYDOWN:
-            #     if event.key == pg.K_UP:
-            #         shuffle(array)
-            #         my_sort(array)
 
 
 def main():
@@ -283,7 +363,7 @@ def main():
 
 
 if __name__ == '__main__':
-    # arr_to_s = np.array([i for i in range(1, 500)])
-    # shuffle(arr_to_s)
-    # draw_sort(arr_to_s, colors=((255, 0, 0), (0, 0, 255)))
-    main()
+    arr_to_s = np.array([i for i in range(1, 200)])
+    shuffle(arr_to_s)
+    draw_sort(arr_to_s, colors=((255, 0, 0), (0, 0, 255)), make_gif=True, gif_method="slow")
+    # main()

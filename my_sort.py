@@ -26,7 +26,7 @@ def my_sort(array: list, reverse: bool = False,
             while j >= 0 and \
                     (cmp(key(temp),  key(arr[j])) if reverse else cmp(key(arr[j]),  key(temp))):
                 arr[j + 1] = arr[j]
-                j = j - 1
+                j -= 1
             arr[j + 1] = temp
 
     def merge_sort(arr: list, depth: int = 1) -> list:
@@ -73,5 +73,4 @@ if __name__ == '__main__':
     from random import randint
 
     lst = [randint(1, 1000) for i in range(1000)]
-    insertion_sort(lst)
-    print(lst)
+    print(my_sort(lst))
