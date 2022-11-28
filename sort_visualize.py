@@ -15,60 +15,74 @@ from time import time
 
 
 class GifSaver:
+    """
+    Класс, сохраняющий гифки
+    """
+
     def __init__(self, directory, screen_width, screen_height):
+        """
+        Конструктор сохранялки гифок
+        :param directory: путь к директории с результирующей гифкой
+        :param screen_width: ширина экрана
+        :param screen_height: высота экрана
+        """
         self.gif_dir = directory
-        self.res_gif_path = self.gif_dir + r"\res1.gif"
-        self.temp_gif_path = self.gif_dir + r"\res2.gif"
+        self.res_gif_path = self.gif_dir + r"\res.gif"
         self.frames = []
         self.frames_count = 0
         self.size = (screen_width, screen_height)
-        self.is_first_pic = True
-        self.file_toggle = True
+        self.gif_num = 1
 
     def add_img(self, data):
+        """
+        Метод добавления кадра к гифке
+        :param data: bytearray картинки
+        """
         img = Image.frombytes("RGBA", self.size, data)
         self.frames_count += 1
         self.frames.append(img)
-        if self.is_first_pic:
-            img.save(self.res_gif_path)
-            img.save(self.temp_gif_path)
-            self.is_first_pic = False
-            return
 
-        if self.frames_count > 200:
+        if self.frames_count > 10:
             self.save_to_gif()
 
     def save_to_gif(self):
-        if self.file_toggle:
-            reading_gif_p, writing_gif_p = self.res_gif_path, self.temp_gif_path
-            reading_gif, writing_gif = Image.open(reading_gif_p), Image.open(writing_gif_p)
-        else:
-            reading_gif_p, writing_gif_p = self.temp_gif_path, self.res_gif_path
-            reading_gif, writing_gif = Image.open(reading_gif_p), Image.open(writing_gif_p)
+        """
+        Метод сохранения гифки в директорию
+        """
+        self.frames[0].save(f"{self.gif_dir}\\part_gif{self.gif_num}.gif",
+                            save_all=True,
+                            append_images=self.frames[1:],
+                            optimize=True,
+                            duration=20,
+                            loop=1)
 
-        self.file_toggle = not self.file_toggle
+        self.frames[0].close()
+        self.frames.clear()
+        self.frames_count = 0
+        self.gif_num += 1
 
-        reading_gif.save(writing_gif_p,
+    def __del__(self):
+        """
+        Метод, вызываемый при удалении экземпляра GifSaver,
+        закрывает все открытые доступы к temp гифкам и удаляет их,
+        оставляя только результирующую гифку
+        """
+        gif_paths_list = list(map(lambda y: self.gif_dir + f"\\{y}",
+                                  filter(lambda x: x.startswith("part_gif"),
+                                         os.listdir(self.gif_dir))))
+        gif_paths_list.sort(key=lambda x: int(x.split("\\")[-1][8:].split(".")[0]))
+        gif_list = list(map(lambda x: Image.open(x), gif_paths_list))
+        gif_list[0].save(self.res_gif_path,
                          save_all=True,
-                         append_images=self.frames,
+                         append_images=gif_list[1:],
                          optimize=True,
                          duration=20,
                          loop=1)
-
-        reading_gif.close()
-        writing_gif.close()
-        self.frames.clear()
-        self.frames_count = 0
-
-    def __del__(self):
-        if self.file_toggle:
-            fin_gif, del_gif = self.res_gif_path, self.temp_gif_path
-        else:
-            fin_gif, del_gif = self.temp_gif_path, self.res_gif_path
-        os.remove(del_gif)
-        print(f"Гифка сохранена по адресу {fin_gif}")
-
-
+        for gif in gif_list:
+            gif.close()
+        for gif in gif_paths_list:
+            os.remove(gif)
+        print(f"Гифка сохранена по адресу {self.res_gif_path}")
 
 
 def timing(f: Callable):
@@ -91,17 +105,6 @@ def timing(f: Callable):
         return result
 
     return wrap
-
-
-def call_counter(func):
-    def helper(*args, **kwargs):
-        helper.calls += 1
-        print(helper.calls)
-        return func(*args, **kwargs)
-
-    print("zero")
-    helper.calls = 0
-    return helper
 
 
 def normalize_color(color: tuple[int, int, int]) -> tuple[float, ...]:
@@ -203,7 +206,7 @@ def draw_array_col(array: np.ndarray, max_el: int, length: int,
 
 def draw_sort(array: np.ndarray, reverse: Optional[bool] = False,
               colors: Optional[tuple[tuple[int, int, int], tuple[int, int, int]]] =
-              ((255, 255, 255), (255, 255, 255)), make_gif=False, gif_method="slow"):
+              ((255, 255, 255), (255, 255, 255)), make_gif=False):
     """
     Функция отрисовки процесса сортировки
     @param array: сортируемый массив
@@ -225,6 +228,7 @@ def draw_sort(array: np.ndarray, reverse: Optional[bool] = False,
     max_element = max(array)
     if make_gif:
         gifer = GifSaver("images", width, height)
+        ts = time()
 
     @timing
     def my_sort(array_to_sort: np.ndarray):
@@ -290,13 +294,8 @@ def draw_sort(array: np.ndarray, reverse: Optional[bool] = False,
                 j += 1
                 draw_array_col(arr, max_element, ar_len, i, width, height, screen, colors_array,
                                tick)
-                if gif_method == "slow" and make_gif:
+                if make_gif:
                     gifer.add_img(pygame.image.tostring(screen, "RGBA"))
-
-            if make_gif and gif_method == "fast":
-                gifer.add_img(pygame.image.tostring(screen, "RGBA"))
-                # print()
-                # return
 
         return merge_sort(array_to_sort, 0, len(array_to_sort) - 1)
 
@@ -304,6 +303,8 @@ def draw_sort(array: np.ndarray, reverse: Optional[bool] = False,
     if make_gif:
         gifer.save_to_gif()
         del gifer
+        te = time()
+        print(f"С сохранением гифки времени: time: {te - ts:2.4f} sec")
     run = True
     while run:
         pg.display.update()
@@ -331,10 +332,13 @@ def main():
                         help="Если указано - сортирует по невозрастанию")
     parser.add_argument("--visualize", "-v", dest="visualize",
                         action=argparse.BooleanOptionalAction,
-                        help="visualize array while sorting")
+                        help="визуализация сортировки")
     parser.add_argument("--colors", "-c", type=int, nargs=6,
                         help="Цвета наименьшего и наибольшего элемента массива, "
                              "для создания градиента")
+    parser.add_argument("--gif", "-g", dest="gif",
+                        action=argparse.BooleanOptionalAction,
+                        help="Нужно ли сохранять гифку с сортировкой")
     args = parser.parse_args()
 
     res = {"array": None,
@@ -357,13 +361,15 @@ def main():
         if args.colors:
             r1, g1, b1, r2, g2, b2 = args.colors
             res["colors"] = ((r1, g1, b1), (r2, g2, b2))
+        if args.gif:
+            res["make_gif"] = True
         draw_sort(**res)
     else:
         print(ms(**res))
 
 
 if __name__ == '__main__':
-    arr_to_s = np.array([i for i in range(1, 200)])
-    shuffle(arr_to_s)
-    draw_sort(arr_to_s, colors=((255, 0, 0), (0, 0, 255)), make_gif=True, gif_method="slow")
-    # main()
+    # arr_to_s = np.array([i for i in range(1, 100)])
+    # shuffle(arr_to_s)
+    # draw_sort(arr_to_s, colors=((255, 0, 0), (0, 0, 255)), make_gif=True)
+    main()
